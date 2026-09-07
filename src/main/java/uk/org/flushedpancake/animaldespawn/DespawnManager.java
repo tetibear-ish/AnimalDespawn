@@ -12,17 +12,16 @@ import org.bukkit.entity.Tameable;
 import org.bukkit.entity.Wolf;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityBreedEvent;
 import org.bukkit.event.entity.EntityTameEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerShearEntityEvent;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -36,6 +35,8 @@ public class DespawnManager implements Listener {
     private final JavaPlugin plugin;
     private final Map<UUID, Long> ages = new HashMap<UUID, Long>();
     private final Set<UUID> protectedAnimals = new HashSet<UUID>();
+    /** UUIDs of naturally spawned baby animals. These are intentionally not protected. */
+    private final Set<UUID> naturalBabies = new HashSet<UUID>();
     private final java.util.Random random = new java.util.Random();
 
     private long scanInterval;
@@ -45,6 +46,7 @@ public class DespawnManager implements Listener {
 
     public DespawnManager(JavaPlugin plugin) {
         this.plugin = plugin;
+        loadNaturalBabies();
         reload();
     }
 
@@ -268,7 +270,9 @@ public class DespawnManager implements Listener {
             return false;
         }
 
-        if (protectedAnimals.contains(entity.getUniqueId())) return true;
+        UUID uuid = entity.getUniqueId();
+
+        if (protectedAnimals.contains(uuid)) return true;
         if (entity.hasMetadata(PROTECTED_META)) return true;
 
         boolean named = plugin.getConfig().getBoolean("protection.named", true);
@@ -290,10 +294,34 @@ public class DespawnManager implements Listener {
         boolean babies = plugin.getConfig().getBoolean("protection.babies", true);
         if (babies && entity instanceof org.bukkit.entity.Ageable
                 && !((org.bukkit.entity.Ageable) entity).isAdult()) {
+            // Natural babies are deliberately eligible for despawning.
+            // Player-bred babies (or babies from other non-natural sources)
+            // retain the normal baby protection.
+            if (naturalBabies.contains(uuid)) {
+                return false;
+            }
             return true;
         }
 
+        // A natural-baby UUID is no longer needed once the entity is adult.
+        if (entity instanceof org.bukkit.entity.Ageable
+                && ((org.bukkit.entity.Ageable) entity).isAdult()) {
+            naturalBabies.remove(uuid);
+        }
+
         return false;
+    }
+
+    @EventHandler
+    public void onCreatureSpawn(CreatureSpawnEvent event) {
+        Entity entity = event.getEntity();
+        if (!(entity instanceof Animals)) return;
+        if (!(entity instanceof org.bukkit.entity.Ageable)) return;
+        if (((org.bukkit.entity.Ageable) entity).isAdult()) return;
+
+        if (event.getSpawnReason() == CreatureSpawnEvent.SpawnReason.NATURAL) {
+            naturalBabies.add(entity.getUniqueId());
+        }
     }
 
     @EventHandler
@@ -474,9 +502,34 @@ public class DespawnManager implements Listener {
         return out.toString();
     }
 
+    private void loadNaturalBabies() {
+        org.bukkit.configuration.file.YamlConfiguration data =
+                org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(
+                        new java.io.File(plugin.getDataFolder(), "data.yml"));
+        for (String value : data.getStringList("natural-babies")) {
+            try {
+                naturalBabies.add(UUID.fromString(value));
+            } catch (IllegalArgumentException ignored) {
+                // Ignore malformed historical UUIDs.
+            }
+        }
+    }
+
     public void save() {
-        // Interaction protection is intentionally runtime-only.
-        // Vanilla NBT/name/leash/tame state persists naturally; interaction
-        // protection is re-established by those states/events when possible.
+        java.io.File folder = plugin.getDataFolder();
+        if (!folder.exists()) folder.mkdirs();
+
+        org.bukkit.configuration.file.YamlConfiguration data =
+                new org.bukkit.configuration.file.YamlConfiguration();
+        List<String> uuids = new ArrayList<String>();
+        for (UUID uuid : naturalBabies) {
+            uuids.add(uuid.toString());
+        }
+        data.set("natural-babies", uuids);
+        try {
+            data.save(new java.io.File(folder, "data.yml"));
+        } catch (java.io.IOException ex) {
+            plugin.getLogger().warning("Could not save natural baby tracking data: " + ex.getMessage());
+        }
     }
 }

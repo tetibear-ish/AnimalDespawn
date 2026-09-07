@@ -1,5 +1,5 @@
 name: AnimalDespawn
-version: 0.4.0
+version: 0.5.0
 main: uk.org.flushedpancake.animaldespawn.AnimalDespawnPlugin
 author: flushedpancake
 description: Beta 1.7.3-style passive animal despawning for Paper 1.12.2.

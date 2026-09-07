@@ -1,6 +1,6 @@
-# AnimalDespawn 0.4.0
+# AnimalDespawn 0.5.0
 #
-# Configurations older than 0.4.0 are automatically replaced with this
+# Configurations older than 0.5.0 are automatically replaced with this
 # configuration on plugin startup.
 #
 # Presets:
@@ -13,7 +13,7 @@
 #
 # Presets affect DESPAWNING only. Paper remains responsible for spawning.
 
-config-version: 0.4.0
+config-version: 0.5.0
 
 preset: BETA_1_7_3
 
@@ -45,6 +45,8 @@ protection:
   # mules) remain eligible even if a player merely feeds them. Once tamed,
   # the tamed protection above applies.
 
+  # Naturally spawned babies are eligible for despawning. Babies produced by
+  # breeding are protected.
   babies: true
   sheared: true
   dyed: true

@@ -21,7 +21,7 @@ public class AnimalDespawnPlugin extends JavaPlugin {
         getLogger().info("AnimalDespawn enabled. Preset: " + manager.getPreset());
     }
 
-    private static final String CONFIG_VERSION = "0.4.0";
+    private static final String CONFIG_VERSION = "0.5.0";
 
     private void refreshConfigIfNeeded() {
         String installedVersion = getConfig().getString("config-version", "0.0.0");
