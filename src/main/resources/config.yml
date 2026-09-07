@@ -1,17 +1,19 @@
-# AnimalDespawn 0.2.0
+# AnimalDespawn 0.4.0
+#
+# Configurations older than 0.4.0 are automatically replaced with this
+# configuration on plugin startup.
 #
 # Presets:
 #   BETA_1_7_3  - classic Beta passive-mob despawning:
 #                  >128 blocks = immediate removal
-#                  >32 blocks after 600 ticks = 1/800 per tick
-#   LEGACY_CONSOLE - legacy-style preset; currently follows the classic
-#                    32/128 block despawn model.
-#   BEDROCK      - Bedrock-style preset; currently follows the classic
-#                  32/128 block despawn model.
+#                  >32 blocks after 600 ticks = 1/800 random roll
+#   LEGACY_CONSOLE - legacy-style preset; follows the classic model.
+#   BEDROCK      - Bedrock-style preset; follows the classic model.
 #   CUSTOM       - use the despawn values below.
 #
-# These presets intentionally affect DESPAWNING only. Paper remains
-# responsible for natural spawning.
+# Presets affect DESPAWNING only. Paper remains responsible for spawning.
+
+config-version: 0.4.0
 
 preset: BETA_1_7_3
 
@@ -30,22 +32,22 @@ despawn:
   maximum-removals-per-scan: 8
 
 protection:
-  # Player interaction / ownership protection.
+  # Tamed animals are always protected.
   tamed: true
+
+  # Player-attached/interacted animals remain protected.
   leashed: true
   named: true
   fed: true
   bred: true
 
-  # In normal 1.12.2 gameplay, ordinary animal babies are player-created
-  # (breeding); protect them rather than treating them as wild spawns.
-  babies: true
+  # Untamed Tameable animals (wolves, ocelots, horses, donkeys, llamas,
+  # mules) remain eligible even if a player merely feeds them. Once tamed,
+  # the tamed protection above applies.
 
-  # A sheep that has been sheared or dyed is considered interacted with.
+  babies: true
   sheared: true
   dyed: true
-
-  # Dyeing a tamed wolf's collar is explicitly recognised as interaction.
   wolf-collar-dyed: true
 
 animals:
@@ -57,6 +59,11 @@ animals:
   MUSHROOM_COW: true
   WOLF: true
   OCELOT: true
+  POLAR_BEAR: true
+  HORSE: true
+  DONKEY: true
+  MULE: true
+  LLAMA: true
 
 worlds:
   whitelist: []

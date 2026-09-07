@@ -132,9 +132,18 @@ public class DespawnManager implements Listener {
                 age += Math.max(1L, elapsedTicks);
                 ages.put(uuid, age);
 
-                if (age > getMinimumAgeTicks() && Bukkit.getLogger() != null) {
+                if (age > getMinimumAgeTicks()) {
                     int bound = getRandomCheckBound();
-                    if (bound <= 1 || random.nextInt(bound) == 0) {
+                    long ticks = Math.max(1L, elapsedTicks);
+
+                    // The configured bound is a per-tick probability. Because
+                    // scans normally run every 20 ticks, combine the elapsed
+                    // ticks into one equivalent roll instead of accidentally
+                    // reducing the configured despawn rate by 20x.
+                    boolean despawnRoll = bound <= 1
+                            || random.nextDouble() < 1.0 - Math.pow(1.0 - (1.0 / bound), ticks);
+
+                    if (despawnRoll) {
                         entity.remove();
                         ages.remove(uuid);
                         removed++;
@@ -339,12 +348,28 @@ public class DespawnManager implements Listener {
             }
         }
 
-        if (plugin.getConfig().getBoolean("protection.fed", true) && isValidFood(target, item.getType())) {
+        if (plugin.getConfig().getBoolean("protection.fed", true)
+                && isValidFood(target, item.getType())
+                && shouldProtectWhenFed(target)) {
             markProtected(target, "fed");
         }
     }
 
-    private boolean isValidFood(Entity entity, Material material) {
+
+
+    /**
+     * Tameable animals are protected because they are tamed, not merely because
+     * a player interacted with/fed them. This is important for wild wolves,
+     * ocelots, horses, donkeys, llamas and mules: feeding an untamed animal
+     * must not turn it into a permanently protected population-cap blocker.
+     */
+    private boolean shouldProtectWhenFed(Entity entity) {
+        if (entity instanceof Tameable) {
+            return ((Tameable) entity).isTamed();
+        }
+        return true;
+    }
+\n    private boolean isValidFood(Entity entity, Material material) {
         if (!(entity instanceof Animals)) return false;
 
         // 1.12.2 feeding/luring foods for the supported passive animals.
@@ -450,7 +475,7 @@ public class DespawnManager implements Listener {
     }
 
     public void save() {
-        // Protection is intentionally runtime-only in 0.2.0.
+        // Interaction protection is intentionally runtime-only.
         // Vanilla NBT/name/leash/tame state persists naturally; interaction
         // protection is re-established by those states/events when possible.
     }
