@@ -68,6 +68,24 @@ config's version is older than the plugin's bundled version, `config.yml`
 is automatically regenerated to the bundled default and reloaded. Back up
 any hand-edited `config.yml` before upgrading the plugin.
 
+Feeding is only protective on its own for animals that cannot be tamed
+(cows, pigs, sheep, chickens, rabbits, mooshrooms). For tameable animals
+(wolves, ocelots, horses, donkeys, mules, llamas), feeding an untamed
+individual does **not** protect it — only taming does. This keeps a
+handful of feed thrown at wild wolves or horses from turning them into
+permanently protected, population-cap-blocking mobs; once actually tamed,
+the `tamed` protection applies as normal.
+
+Polar bears are now included in the default `animals:` list alongside
+horses, donkeys, mules, and llamas.
+
+## Configuration upgrades
+
+`config.yml` carries a `config-version` field. On startup, if the installed
+config's version is older than the plugin's bundled version, `config.yml`
+is automatically regenerated to the bundled default and reloaded. Back up
+any hand-edited `config.yml` before upgrading the plugin.
+
 ## Paper settings
 
 A useful 1.12.2 setup is:

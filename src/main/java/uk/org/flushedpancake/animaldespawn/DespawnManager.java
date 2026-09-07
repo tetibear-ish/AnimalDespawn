@@ -397,7 +397,7 @@ public class DespawnManager implements Listener {
         }
         return true;
     }
-\n    private boolean isValidFood(Entity entity, Material material) {
+    private boolean isValidFood(Entity entity, Material material) {
         if (!(entity instanceof Animals)) return false;
 
         // 1.12.2 feeding/luring foods for the supported passive animals.
