@@ -1,4 +1,4 @@
-# AnimalDespawn 0.4.0
+# AnimalDespawn 0.5.0
 
 Legacy-style passive animal despawning for Paper 1.12.2.
 
@@ -17,6 +17,7 @@ Classic Beta-style values:
 - more than 128 blocks from the nearest player: immediate removal
 - more than 32 blocks away: age accumulates
 - after 600 ticks outside 32 blocks: 1/800 random removal roll per scan
+- within 32 blocks: age resets
 
 The random removal roll accounts for the configured scan interval: with the
 default `scan-interval-ticks: 20`, the plugin combines 20 ticks' worth of
@@ -40,9 +41,32 @@ By default the plugin protects animals after:
 - being sheared
 - being dyed
 - dyeing a tamed wolf's collar
-- being a baby
+- being a player-bred baby
 
-Baby protection is intentional for 1.12.2: ordinary passive-animal babies are player-created through breeding rather than ordinary wild spawning.
+Feeding is only protective on its own for animals that cannot be tamed
+(cows, pigs, sheep, chickens, rabbits, mooshrooms). For tameable animals
+(wolves, ocelots, horses, donkeys, mules, llamas), feeding an untamed
+individual does **not** protect it — only taming does. This keeps a
+handful of feed thrown at wild wolves or horses from turning them into
+permanently protected, population-cap-blocking mobs; once actually tamed,
+the `tamed` protection applies as normal.
+
+Babies are split by origin: a baby produced by breeding is protected (it is
+player-created), while a baby from ordinary natural spawning is treated as
+an eligible wild spawn and left despawn-eligible like its adult form. Each
+naturally spawned baby's UUID is tracked and persisted in `data.yml` so this
+distinction survives a server restart; the entry is dropped once the animal
+grows up.
+
+Polar bears are now included in the default `animals:` list alongside
+horses, donkeys, mules, and llamas.
+
+## Configuration upgrades
+
+`config.yml` carries a `config-version` field. On startup, if the installed
+config's version is older than the plugin's bundled version, `config.yml`
+is automatically regenerated to the bundled default and reloaded. Back up
+any hand-edited `config.yml` before upgrading the plugin.
 
 Feeding is only protective on its own for animals that cannot be tamed
 (cows, pigs, sheep, chickens, rabbits, mooshrooms). For tameable animals
@@ -91,4 +115,4 @@ Use the included `build.bat` on the Windows machine with a Java 8 JDK and Maven 
 
 The output JAR is:
 
-`target/AnimalDespawn-0.4.0.jar`
+`target/AnimalDespawn-0.5.0.jar`
