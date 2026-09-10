@@ -7,6 +7,7 @@ import org.bukkit.scheduler.BukkitTask;
 public class AnimalDespawnPlugin extends JavaPlugin {
     private DespawnManager manager;
     private BukkitTask task;
+    private BukkitTask spawnTask;
 
     @Override
     public void onEnable() {
@@ -18,10 +19,11 @@ public class AnimalDespawnPlugin extends JavaPlugin {
         getCommand("animaldespawn").setExecutor(new AnimalDespawnCommand(this, manager));
 
         scheduleManager();
+        scheduleSpawnAssistance();
         getLogger().info("AnimalDespawn enabled. Preset: " + manager.getPreset());
     }
 
-    private static final String CONFIG_VERSION = "0.5.0";
+    private static final String CONFIG_VERSION = "0.6.0";
 
     private void refreshConfigIfNeeded() {
         String installedVersion = getConfig().getString("config-version", "0.0.0");
@@ -72,10 +74,27 @@ public class AnimalDespawnPlugin extends JavaPlugin {
         }, interval, interval);
     }
 
+    private void scheduleSpawnAssistance() {
+        if (spawnTask != null) {
+            spawnTask.cancel();
+        }
+
+        long interval = Math.max(20L, manager.getSpawnAssistInterval());
+        spawnTask = Bukkit.getScheduler().runTaskTimer(this, new Runnable() {
+            @Override
+            public void run() {
+                manager.runSpawnAssistance();
+            }
+        }, interval, interval);
+    }
+
     @Override
     public void onDisable() {
         if (task != null) {
             task.cancel();
+        }
+        if (spawnTask != null) {
+            spawnTask.cancel();
         }
         if (manager != null) {
             manager.save();
