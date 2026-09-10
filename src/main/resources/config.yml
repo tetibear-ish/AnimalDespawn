@@ -1,6 +1,6 @@
-# AnimalDespawn 0.5.0
+# AnimalDespawn 0.6.0
 #
-# Configurations older than 0.5.0 are automatically replaced with this
+# Configurations older than 0.6.0 are automatically replaced with this
 # configuration on plugin startup.
 #
 # Presets:
@@ -13,7 +13,7 @@
 #
 # Presets affect DESPAWNING only. Paper remains responsible for spawning.
 
-config-version: 0.5.0
+config-version: 0.6.0
 
 preset: BETA_1_7_3
 
@@ -74,3 +74,14 @@ worlds:
 debug:
   enabled: false
   spawning: false
+
+# Paper 1.12.2 can fail to repopulate some newer passive animals in
+# established chunks. This assistant only targets rabbits and parrots.
+spawn-assist:
+  enabled: true
+  interval-ticks: 1200
+  radius: 64
+  minimum-count: 1
+  maximum-spawns-per-cycle: 4
+  rabbit: true
+  parrot: true

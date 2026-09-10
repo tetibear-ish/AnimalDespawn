@@ -1,11 +1,15 @@
 package uk.org.flushedpancake.animaldespawn;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Biome;
+import org.bukkit.Location;
+import org.bukkit.block.Block;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.Animals;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Sheep;
 import org.bukkit.entity.Tameable;
@@ -26,6 +30,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.Set;
 import java.util.UUID;
 
@@ -38,6 +43,10 @@ public class DespawnManager implements Listener {
     /** UUIDs of naturally spawned baby animals. These are intentionally not protected. */
     private final Set<UUID> naturalBabies = new HashSet<UUID>();
     private final java.util.Random random = new java.util.Random();
+    private final Map<String, Integer> spawnCounts = new LinkedHashMap<String, Integer>();
+    private final Map<String, Integer> spawnReasonCounts = new LinkedHashMap<String, Integer>();
+    private long assistedSpawns;
+    private long diagnosticStartedAt = System.currentTimeMillis();
 
     private long scanInterval;
     private int maximumRemovals;
@@ -316,12 +325,24 @@ public class DespawnManager implements Listener {
     public void onCreatureSpawn(CreatureSpawnEvent event) {
         Entity entity = event.getEntity();
         if (!(entity instanceof Animals)) return;
+
+        String type = entity.getType().name();
+        spawnCounts.put(type, getCount(spawnCounts, type) + 1);
+        String reason = event.getSpawnReason().name();
+        spawnReasonCounts.put(reason, getCount(spawnReasonCounts, reason) + 1);
+
         if (!(entity instanceof org.bukkit.entity.Ageable)) return;
         if (((org.bukkit.entity.Ageable) entity).isAdult()) return;
 
-        if (event.getSpawnReason() == CreatureSpawnEvent.SpawnReason.NATURAL) {
+        if (event.getSpawnReason() == CreatureSpawnEvent.SpawnReason.NATURAL
+                || event.getSpawnReason() == CreatureSpawnEvent.SpawnReason.CHUNK_GEN) {
             naturalBabies.add(entity.getUniqueId());
         }
+    }
+
+    private int getCount(Map<String, Integer> map, String key) {
+        Integer value = map.get(key);
+        return value == null ? 0 : value;
     }
 
     @EventHandler
@@ -499,6 +520,221 @@ public class DespawnManager implements Listener {
                    .append("1/").append(getRandomCheckBound()).append(" per tick");
             }
         }
+        return out.toString();
+    }
+
+    public long getSpawnAssistInterval() {
+        return Math.max(20L, plugin.getConfig().getLong("spawn-assist.interval-ticks", 1200L));
+    }
+
+    /**
+     * Targeted compatibility assistance for passive animals which are known to
+     * have trouble repopulating established 1.12.2 chunks. This deliberately
+     * does not replace vanilla spawning for every animal.
+     */
+    public void runSpawnAssistance() {
+        if (!enabled || !plugin.getConfig().getBoolean("spawn-assist.enabled", true)) return;
+
+        int maximum = Math.max(1, plugin.getConfig().getInt("spawn-assist.maximum-spawns-per-cycle", 4));
+        int spawned = 0;
+        Set<String> checkedAreas = new HashSet<String>();
+        List<Player> players = new ArrayList<Player>(Bukkit.getOnlinePlayers());
+        java.util.Collections.shuffle(players, random);
+
+        for (Player player : players) {
+            if (spawned >= maximum) break;
+            World world = player.getWorld();
+            if (!isWorldEnabled(world)) continue;
+
+            int chunkX = player.getLocation().getBlockX() >> 4;
+            int chunkZ = player.getLocation().getBlockZ() >> 4;
+            String areaKey = world.getName() + ":" + chunkX + ":" + chunkZ;
+            if (!checkedAreas.add(areaKey)) continue;
+
+            if (plugin.getConfig().getBoolean("spawn-assist.rabbit", true)
+                    && isRabbitBiome(player.getLocation().getBlock().getBiome())) {
+                int current = countAnimalsNear(player, EntityType.RABBIT,
+                        plugin.getConfig().getDouble("spawn-assist.radius", 64.0));
+                int minimum = Math.max(0, plugin.getConfig().getInt("spawn-assist.minimum-count", 1));
+                if (current < minimum) {
+                    int amount = randomBetween(2, 3);
+                    amount = Math.min(amount, maximum - spawned);
+                    for (int i = 0; i < amount; i++) {
+                        if (spawnAssistedAnimal(player, EntityType.RABBIT)) {
+                            spawned++;
+                        }
+                    }
+                    continue;
+                }
+            }
+
+            if (plugin.getConfig().getBoolean("spawn-assist.parrot", true)
+                    && isParrotBiome(player.getLocation().getBlock().getBiome())) {
+                int current = countAnimalsNear(player, EntityType.PARROT,
+                        plugin.getConfig().getDouble("spawn-assist.radius", 64.0));
+                int minimum = Math.max(0, plugin.getConfig().getInt("spawn-assist.minimum-count", 1));
+                if (current < minimum) {
+                    int amount = Math.min(randomBetween(1, 2), maximum - spawned);
+                    for (int i = 0; i < amount; i++) {
+                        if (spawnAssistedAnimal(player, EntityType.PARROT)) {
+                            spawned++;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private int randomBetween(int min, int max) {
+        return min + random.nextInt(max - min + 1);
+    }
+
+    private int countAnimalsNear(Player player, EntityType type, double radius) {
+        int count = 0;
+        double radiusSquared = radius * radius;
+        for (Entity entity : player.getWorld().getEntities()) {
+            if (entity.getType() != type) continue;
+            if (entity.getLocation().distanceSquared(player.getLocation()) <= radiusSquared) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private boolean spawnAssistedAnimal(Player player, EntityType type) {
+        Location location = findAssistLocation(player, type);
+        if (location == null) return false;
+
+        try {
+            Entity entity = player.getWorld().spawnEntity(location, type);
+            if (!(entity instanceof Animals)) {
+                entity.remove();
+                return false;
+            }
+            assistedSpawns++;
+            if (plugin.getConfig().getBoolean("debug.spawning", false)) {
+                plugin.getLogger().info("Spawn assist created " + type.name() + " at "
+                        + location.getBlockX() + "," + location.getBlockY() + "," + location.getBlockZ()
+                        + " in " + player.getWorld().getName());
+            }
+            return true;
+        } catch (IllegalArgumentException ex) {
+            plugin.getLogger().warning("Could not spawn assisted " + type.name() + ": " + ex.getMessage());
+            return false;
+        }
+    }
+
+    private Location findAssistLocation(Player player, EntityType type) {
+        int radius = 32;
+        for (int attempt = 0; attempt < 20; attempt++) {
+            int x = player.getLocation().getBlockX() + random.nextInt(radius * 2 + 1) - radius;
+            int z = player.getLocation().getBlockZ() + random.nextInt(radius * 2 + 1) - radius;
+            int y = player.getWorld().getHighestBlockYAt(x, z);
+            if (y <= 0 || y >= 254) continue;
+
+            Location location = new Location(player.getWorld(), x + 0.5, y + 1.0, z + 0.5);
+            Biome biome = player.getWorld().getBiome(x, z);
+            if (type == EntityType.RABBIT && !isRabbitBiome(biome)) continue;
+            if (type == EntityType.PARROT && !isParrotBiome(biome)) continue;
+
+            Block ground = player.getWorld().getBlockAt(x, y, z);
+            Block feet = player.getWorld().getBlockAt(x, y + 1, z);
+            Block head = player.getWorld().getBlockAt(x, y + 2, z);
+            if (!ground.getType().isSolid()) continue;
+            if (feet.getType() != Material.AIR || head.getType() != Material.AIR) continue;
+            if (ground.isLiquid()) continue;
+            if (location.distanceSquared(player.getLocation()) < 16.0) continue;
+            return location;
+        }
+        return null;
+    }
+
+    private boolean isRabbitBiome(Biome biome) {
+        switch (biome) {
+            case DESERT:
+            case DESERT_HILLS:
+            case MUTATED_DESERT:
+            case MUTATED_FOREST:
+            case TAIGA:
+            case TAIGA_HILLS:
+            case MUTATED_TAIGA:
+            case REDWOOD_TAIGA:
+            case REDWOOD_TAIGA_HILLS:
+            case TAIGA_COLD:
+            case TAIGA_COLD_HILLS:
+            case MUTATED_TAIGA_COLD:
+            case ICE_FLATS:
+            case ICE_MOUNTAINS:
+            case MUTATED_ICE_FLATS:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private boolean isParrotBiome(Biome biome) {
+        switch (biome) {
+            case JUNGLE:
+            case JUNGLE_HILLS:
+            case JUNGLE_EDGE:
+            case MUTATED_JUNGLE:
+            case MUTATED_JUNGLE_EDGE:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    public void resetSpawnDiagnostics() {
+        spawnCounts.clear();
+        spawnReasonCounts.clear();
+        assistedSpawns = 0L;
+        diagnosticStartedAt = System.currentTimeMillis();
+    }
+
+    public String getSpawnDiagnostics(Player player) {
+        StringBuilder out = new StringBuilder();
+        out.append(ChatColor.YELLOW).append("AnimalDespawn spawn diagnostics").append("\n");
+        out.append(ChatColor.GRAY).append("Tracking since: ").append(ChatColor.WHITE)
+                .append(new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date(diagnosticStartedAt)))
+                .append("\n");
+        out.append(ChatColor.GRAY).append("Assisted spawns: ").append(ChatColor.WHITE).append(assistedSpawns).append("\n");
+
+        out.append(ChatColor.YELLOW).append("Animal spawn events:").append("\n");
+        if (spawnCounts.isEmpty()) {
+            out.append(ChatColor.GRAY).append("  none observed").append("\n");
+        } else {
+            for (Map.Entry<String, Integer> entry : spawnCounts.entrySet()) {
+                out.append(ChatColor.GRAY).append("  ").append(entry.getKey()).append(": ")
+                        .append(ChatColor.WHITE).append(entry.getValue()).append("\n");
+            }
+        }
+
+        out.append(ChatColor.YELLOW).append("Spawn reasons:").append("\n");
+        if (spawnReasonCounts.isEmpty()) {
+            out.append(ChatColor.GRAY).append("  none observed").append("\n");
+        } else {
+            for (Map.Entry<String, Integer> entry : spawnReasonCounts.entrySet()) {
+                out.append(ChatColor.GRAY).append("  ").append(entry.getKey()).append(": ")
+                        .append(ChatColor.WHITE).append(entry.getValue()).append("\n");
+            }
+        }
+
+        if (player != null) {
+            World world = player.getWorld();
+            Biome biome = player.getLocation().getBlock().getBiome();
+            out.append(ChatColor.YELLOW).append("Current area:").append("\n");
+            out.append(ChatColor.GRAY).append("  world: ").append(ChatColor.WHITE).append(world.getName()).append("\n");
+            out.append(ChatColor.GRAY).append("  biome: ").append(ChatColor.WHITE).append(biome.name()).append("\n");
+            out.append(ChatColor.GRAY).append("  chunk: ").append(ChatColor.WHITE)
+                    .append(player.getLocation().getBlockX() >> 4).append(", ")
+                    .append(player.getLocation().getBlockZ() >> 4).append("\n");
+            out.append(ChatColor.GRAY).append("  nearby rabbits: ").append(ChatColor.WHITE)
+                    .append(countAnimalsNear(player, EntityType.RABBIT, plugin.getConfig().getDouble("spawn-assist.radius", 64.0))).append("\n");
+            out.append(ChatColor.GRAY).append("  nearby parrots: ").append(ChatColor.WHITE)
+                    .append(countAnimalsNear(player, EntityType.PARROT, plugin.getConfig().getDouble("spawn-assist.radius", 64.0))).append("\n");
+        }
+        out.append(ChatColor.DARK_GRAY).append("Use /animaldespawn diagnose reset to clear counters.");
         return out.toString();
     }
 

