@@ -31,6 +31,7 @@ import java.util.UUID;
 
 public class DespawnManager implements Listener {
     private static final String PROTECTED_META = "animaldespawn-protected";
+    private static final String SPAWN_ASSIST_NATURAL_BABY_META = "passive-spawn-assist-natural-baby";
 
     private final JavaPlugin plugin;
     private final Map<UUID, Long> ages = new HashMap<UUID, Long>();
@@ -297,7 +298,7 @@ public class DespawnManager implements Listener {
             // Natural babies are deliberately eligible for despawning.
             // Player-bred babies (or babies from other non-natural sources)
             // retain the normal baby protection.
-            if (naturalBabies.contains(uuid)) {
+            if (naturalBabies.contains(uuid) || entity.hasMetadata(SPAWN_ASSIST_NATURAL_BABY_META)) {
                 return false;
             }
             return true;
@@ -319,7 +320,8 @@ public class DespawnManager implements Listener {
         if (!(entity instanceof org.bukkit.entity.Ageable)) return;
         if (((org.bukkit.entity.Ageable) entity).isAdult()) return;
 
-        if (event.getSpawnReason() == CreatureSpawnEvent.SpawnReason.NATURAL) {
+        if (event.getSpawnReason() == CreatureSpawnEvent.SpawnReason.NATURAL
+                || entity.hasMetadata(SPAWN_ASSIST_NATURAL_BABY_META)) {
             naturalBabies.add(entity.getUniqueId());
         }
     }

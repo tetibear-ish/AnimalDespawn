@@ -1,4 +1,4 @@
-# AnimalDespawn 0.5.0
+# AnimalDespawn 0.5.1
 
 Legacy-style passive animal despawning for Paper 1.12.2.
 
